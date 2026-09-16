@@ -1,30 +1,122 @@
-import React, { useState } from 'react';
-import { PatientProfile } from '../types';
+import React, { useState, useMemo } from 'react';
+import { PatientProfile, InsulinRecord } from '../types';
+import { calculateCurrentIob, calculateSingleDoseIob } from '../services/iobEngine';
 
 interface InsulinIobViewProps {
   profile: PatientProfile;
-  onReseedData: () => void;
+  insulinRecords?: InsulinRecord[];
   onOpenParameterModal: () => void;
 }
 
 export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
   profile,
-  onReseedData,
+  insulinRecords = [],
   onOpenParameterModal
 }) => {
   const [basalActive, setBasalActive] = useState(false);
-  const [isReseeding, setIsReseeding] = useState(false);
-  const [reseedSuccess, setReseedSuccess] = useState(false);
 
-  const handleReseed = () => {
-    setIsReseeding(true);
-    setTimeout(() => {
-      onReseedData();
-      setIsReseeding(false);
-      setReseedSuccess(true);
-      setTimeout(() => setReseedSuccess(false), 3000);
-    }, 600);
+  const now = new Date();
+  const todayDateStr = now.toISOString().split('T')[0];
+
+  // Dynamic IOB computation from real logged records
+  const iobResult = useMemo(() => {
+    return calculateCurrentIob(
+      insulinRecords,
+      now.toISOString(),
+      profile.activeDurationHours || 6.0,
+      profile.insulinSensitivityFactor
+    );
+  }, [insulinRecords, profile.activeDurationHours, profile.insulinSensitivityFactor]);
+
+  // Find latest active dose
+  const latestDose = useMemo(() => {
+    if (insulinRecords.length === 0) return null;
+    return [...insulinRecords].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )[0];
+  }, [insulinRecords]);
+
+  // Elapsed hours since latest dose
+  const elapsedHours = useMemo(() => {
+    if (!latestDose) return 0;
+    return Math.max(0, (Date.now() - new Date(latestDose.timestamp).getTime()) / 3600000);
+  }, [latestDose]);
+
+  // Today's logged insulin events (or within last 24h)
+  const todayRecords = useMemo(() => {
+    return insulinRecords.filter(r => {
+      const d = new Date(r.timestamp);
+      const isToday = d.toISOString().split('T')[0] === todayDateStr;
+      const isRecent = (now.getTime() - d.getTime()) <= 24 * 3600 * 1000;
+      return isToday || isRecent;
+    });
+  }, [insulinRecords, todayDateStr]);
+
+  // Check for Morning dose
+  const morningRecord = useMemo(() => {
+    return todayRecords.find(r => 
+      r.slot === 'before_breakfast' ||
+      r.slot === 'after_breakfast' ||
+      r.context === 'before_breakfast' ||
+      r.context === 'after_breakfast' ||
+      (r.notes && (r.notes.toLowerCase().includes('morning') || r.notes.toLowerCase().includes('breakfast'))) ||
+      (!r.slot && new Date(r.timestamp).getHours() >= 4 && new Date(r.timestamp).getHours() < 12)
+    );
+  }, [todayRecords]);
+
+  // Check for Night / Dinner dose
+  const nightRecord = useMemo(() => {
+    return todayRecords.find(r => 
+      r.slot === 'before_dinner' ||
+      r.slot === 'after_dinner' ||
+      r.slot === 'bedtime' ||
+      r.context === 'before_dinner' ||
+      r.context === 'after_dinner' ||
+      r.context === 'bedtime' ||
+      (r.notes && (r.notes.toLowerCase().includes('dinner') || r.notes.toLowerCase().includes('night') || r.notes.toLowerCase().includes('bedtime'))) ||
+      (!r.slot && new Date(r.timestamp).getHours() >= 17)
+    );
+  }, [todayRecords]);
+
+  // Calculate residual for specific dose
+  const getResidualForRecord = (record?: InsulinRecord) => {
+    if (!record) return 0;
+    const elapsed = (Date.now() - new Date(record.timestamp).getTime()) / 3600000;
+    if (elapsed < 0 || elapsed >= (profile.activeDurationHours || 6.0)) return 0;
+    const res = calculateSingleDoseIob(record.doseUnits, record.insulinId || 'mixtard_30', elapsed, profile.activeDurationHours || 6.0);
+    return res.remainingUnits;
   };
+
+  const morningResidual = getResidualForRecord(morningRecord);
+  const nightResidual = getResidualForRecord(nightRecord);
+
+  const formatTimeOnly = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
+  // Predicted clearance string
+  const clearanceText = useMemo(() => {
+    if (iobResult.totalIob <= 0.02) return '0m (Clear)';
+    const hours = Math.floor(iobResult.estimatedClearanceHours);
+    const mins = Math.round((iobResult.estimatedClearanceHours % 1) * 60);
+    return `${hours}h ${mins}m`;
+  }, [iobResult]);
+
+  // Dynamic X position on the 18h PK timeline (10px to 330px)
+  const markerX = useMemo(() => {
+    if (!latestDose || iobResult.totalIob <= 0.02) return 10;
+    return Math.max(10, Math.min(330, 10 + (elapsedHours / 18) * 320));
+  }, [latestDose, iobResult.totalIob, elapsedHours]);
+
+  const totalUnitsLoggedToday = useMemo(() => {
+    return todayRecords.reduce((acc, r) => acc + (r.doseUnits || 0), 0);
+  }, [todayRecords]);
+
+  const totalPrescribed = (profile.morningDose || 20) + (profile.nightDose || 20);
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-4 pt-3 pb-24 space-y-4">
@@ -62,8 +154,10 @@ export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-1 bg-[#eff4ff] px-2 py-1 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-[#00685f] animate-ping" />
-            <span className="text-[11px] text-[#00685f] font-bold">T+6.2h</span>
+            <span className={`w-2 h-2 rounded-full ${iobResult.totalIob > 0.05 ? 'bg-[#00685f] animate-ping' : 'bg-[#6d7a77]'}`} />
+            <span className="text-[11px] text-[#00685f] font-bold">
+              {latestDose && iobResult.totalIob > 0.05 ? `T+${elapsedHours.toFixed(1)}h` : 'Standby'}
+            </span>
           </div>
         </div>
 
@@ -124,9 +218,13 @@ export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
               strokeWidth="2.5"
             />
 
-            {/* Current Elapsed Time Marker (6.2 hours mark = ~110px) */}
-            <line stroke="#ba1a1a" strokeDasharray="3,3" strokeWidth="1.5" x1="110" x2="110" y1="10" y2="115" />
-            <circle cx="110" cy="50" fill="#ba1a1a" r="4.5" />
+            {/* Current Elapsed Time Marker */}
+            {iobResult.totalIob > 0.02 && (
+              <>
+                <line stroke="#ba1a1a" strokeDasharray="3,3" strokeWidth="1.5" x1={markerX} x2={markerX} y1="10" y2="115" />
+                <circle cx={markerX} cy="50" fill="#ba1a1a" r="4.5" />
+              </>
+            )}
           </svg>
 
           {/* Time Axis */}
@@ -145,7 +243,7 @@ export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
             <div>
               <span className="text-[10px] text-[#3d4947] block font-medium">Total Active IOB</span>
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] text-[#00685f] font-extrabold">
-                1.44 <span className="text-[12px] font-normal text-[#3d4947]">units</span>
+                {iobResult.totalIob.toFixed(2)} <span className="text-[12px] font-normal text-[#3d4947]">units</span>
               </span>
             </div>
             <div className="w-8 h-8 rounded-full bg-[#008378] text-white flex items-center justify-center shadow-xs">
@@ -157,7 +255,7 @@ export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
             <div>
               <span className="text-[10px] text-[#3d4947] block font-medium">Pred. Clearance</span>
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] text-[#0b1c30] font-extrabold">
-                5h 40m
+                {clearanceText}
               </span>
             </div>
             <div className="w-8 h-8 rounded-full bg-[#dce9ff] text-[#00685f] flex items-center justify-center shadow-xs">
@@ -200,49 +298,99 @@ export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
             </div>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-[#3d4947] block font-medium">Total Daily</span>
-            <span className="text-[14px] text-[#00685f] font-bold">40 units</span>
+            <span className="text-[10px] text-[#3d4947] block font-medium">Daily Target / Logged</span>
+            <span className="text-[14px] text-[#00685f] font-bold">
+              {totalUnitsLoggedToday > 0 ? `${totalUnitsLoggedToday}u logged` : `${totalPrescribed} units Rx`}
+            </span>
           </div>
         </div>
 
-        {/* Administration Timing Breakdown */}
+        {/* Administration Timing Breakdown (Dynamically derived from real logged records) */}
         <div className="grid grid-cols-2 gap-2 pt-1">
+          {/* Morning Dose */}
           <div className="bg-[#eff4ff] rounded-2xl p-2.5 flex flex-col gap-1 border border-[#e5eeff]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1 text-[#0b1c30]">
                 <span className="material-symbols-outlined text-[16px] text-[#00685f]">wb_twilight</span>
                 <span className="text-[12px] font-bold">Morning Dose</span>
               </div>
-              <span className="text-[10px] text-[#006947] bg-[#006947]/10 px-1.5 py-0.5 rounded font-bold">
-                Injected
-              </span>
+              {morningRecord ? (
+                <span className="text-[10px] text-[#006947] bg-[#006947]/10 px-1.5 py-0.5 rounded font-bold">
+                  Injected
+                </span>
+              ) : (
+                <span className="text-[10px] text-[#3d4947] bg-[#eff4ff] border border-[#dce9ff] px-1.5 py-0.5 rounded font-bold">
+                  Upcoming
+                </span>
+              )}
             </div>
             <div className="flex items-baseline justify-between mt-0.5">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold text-[#0b1c30]">
-                20 <span className="text-[11px] font-normal text-[#3d4947]">u</span>
+                {morningRecord ? morningRecord.doseUnits : (profile.morningDose || 20)}{' '}
+                <span className="text-[11px] font-normal text-[#3d4947]">u</span>
               </span>
-              <span className="text-[11px] text-[#3d4947]">7:30 AM (Breakfast)</span>
+              <span className="text-[11px] text-[#3d4947]">
+                {morningRecord
+                  ? `${formatTimeOnly(morningRecord.timestamp)} (Breakfast)`
+                  : '7:30 AM (Breakfast)'}
+              </span>
             </div>
-            <span className="text-[10px] text-[#00685f] font-semibold mt-0.5">Current residual: ~1.4u active</span>
+            <span className="text-[10px] font-medium mt-0.5">
+              {morningRecord ? (
+                morningResidual > 0.05 ? (
+                  <span className="text-[#00685f] font-semibold">
+                    Current residual: ~{morningResidual.toFixed(1)}u active
+                  </span>
+                ) : (
+                  <span className="text-[#006947] font-semibold">Dose cleared</span>
+                )
+              ) : (
+                <span className="text-[#3d4947]">Pending morning log</span>
+              )}
+            </span>
           </div>
 
+          {/* Night / Dinner Dose */}
           <div className="bg-[#eff4ff] rounded-2xl p-2.5 flex flex-col gap-1 border border-[#e5eeff]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1 text-[#0b1c30]">
                 <span className="material-symbols-outlined text-[16px] text-[#4648d4]">dark_mode</span>
                 <span className="text-[12px] font-bold">Night Dose</span>
               </div>
-              <span className="text-[10px] text-[#3d4947] bg-[#d3e4fe] px-1.5 py-0.5 rounded font-bold">
-                Upcoming
-              </span>
+              {nightRecord ? (
+                <span className="text-[10px] text-[#006947] bg-[#006947]/10 px-1.5 py-0.5 rounded font-bold">
+                  Injected
+                </span>
+              ) : (
+                <span className="text-[10px] text-[#3d4947] bg-[#d3e4fe] px-1.5 py-0.5 rounded font-bold">
+                  Upcoming
+                </span>
+              )}
             </div>
             <div className="flex items-baseline justify-between mt-0.5">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold text-[#0b1c30]">
-                20 <span className="text-[11px] font-normal text-[#3d4947]">u</span>
+                {nightRecord ? nightRecord.doseUnits : (profile.nightDose || 20)}{' '}
+                <span className="text-[11px] font-normal text-[#3d4947]">u</span>
               </span>
-              <span className="text-[11px] text-[#3d4947]">8:00 PM (Dinner)</span>
+              <span className="text-[11px] text-[#3d4947]">
+                {nightRecord
+                  ? `${formatTimeOnly(nightRecord.timestamp)} (Dinner)`
+                  : '8:00 PM (Dinner)'}
+              </span>
             </div>
-            <span className="text-[10px] text-[#3d4947] font-medium mt-0.5">Pre-meal verification req.</span>
+            <span className="text-[10px] font-medium mt-0.5">
+              {nightRecord ? (
+                nightResidual > 0.05 ? (
+                  <span className="text-[#00685f] font-semibold">
+                    Current residual: ~{nightResidual.toFixed(1)}u active
+                  </span>
+                ) : (
+                  <span className="text-[#006947] font-semibold">Dose cleared</span>
+                )
+              ) : (
+                <span className="text-[#3d4947]">Pre-meal verification req.</span>
+              )}
+            </span>
           </div>
         </div>
 
@@ -474,68 +622,6 @@ export const InsulinIobView: React.FC<InsulinIobViewProps> = ({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Test Environment & SQLite Seed Manager (Delightful Diagnostics Card matching Section 17 & Screen 3) */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-[#e5eeff] flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#e1e0ff] text-[#07006c] flex items-center justify-center">
-              <span className="material-symbols-outlined text-[20px]">database</span>
-            </div>
-            <div>
-              <span className="font-['Plus_Jakarta_Sans',sans-serif] font-bold text-[15px] text-[#0b1c30] block leading-tight">
-                SQLite Seed &amp; Telemetry Sandbox
-              </span>
-              <span className="text-[11px] text-[#3d4947]">Local clinical sandbox runner</span>
-            </div>
-          </div>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-[#6ffbbe] text-[#002113] font-bold">
-            SYNCED
-          </span>
-        </div>
-
-        {/* Active Scenario Banner */}
-        <div className="bg-[#eff4ff] rounded-2xl p-3 flex items-start gap-2.5 border border-[#e5eeff]">
-          <span className="material-symbols-outlined text-[#00685f] text-[20px] mt-0.5">science</span>
-          <div className="flex flex-col flex-1">
-            <span className="text-[12px] font-bold text-[#0b1c30]">3-Day Mixtard Test Scenario Loaded</span>
-            <span className="text-[11px] text-[#3d4947] leading-relaxed">
-              72-hour benchmark dataset seeded: Morning 20u @ 07:30 + Night 20u @ 20:00 with simulated postprandial glucose excursions.
-            </span>
-            <div className="flex items-center gap-3 mt-2 text-[10px] text-[#3d4947] font-semibold">
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00685f]" /> 18 Fingerstick logs
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#4648d4]" /> 6 Bolus injections
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#006947]" /> 9 Meals recorded
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Seed Control Button */}
-        <button
-          onClick={handleReseed}
-          disabled={isReseeding}
-          className="w-full h-12 rounded-full bg-[#00685f] hover:bg-[#005049] active:scale-98 transition-all text-white text-[13px] font-bold flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-75"
-        >
-          <span className={`material-symbols-outlined text-[20px] ${isReseeding ? 'animate-spin' : ''}`}>
-            restart_alt
-          </span>
-          <span>
-            {isReseeding ? 'Generating Subcutaneous Vectors...' : 'Reset & Re-seed 3-Day Test Dataset'}
-          </span>
-        </button>
-
-        {reseedSuccess && (
-          <div className="text-center py-1 text-[11px] text-[#006947] font-semibold animate-fade-in">
-            ✓ SQLite database re-populated with 3-Day Mixtard scenario in 32ms.
-          </div>
-        )}
       </div>
     </div>
   );

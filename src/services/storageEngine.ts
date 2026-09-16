@@ -75,7 +75,7 @@ export function loadAllProfiles(): PatientProfile[] {
           avatarColor: legacy.avatarColor || '#00685f',
           lastLoginAt: legacy.lastLoginAt || new Date().toISOString()
         };
-        const initialList = [migrated, DEMO_PROFILES[1]];
+        const initialList = [migrated];
         saveAllProfiles(initialList);
         return initialList;
       }

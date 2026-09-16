@@ -104,37 +104,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-4 pt-3 pb-24 space-y-4">
-      {/* Test Data Banner / User Notice */}
-      <div className="p-3 bg-gradient-to-r from-[#eff4ff] to-[#e1e0ff] rounded-2xl border border-[#c0c1ff]/50 flex items-center justify-between gap-2 shadow-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-[#00685f]/10 text-[#00685f] flex items-center justify-center flex-shrink-0">
-            <span className="material-symbols-outlined text-[18px]">science</span>
-          </div>
-          <div className="min-w-0">
-            <span className="text-[12px] font-bold text-[#0b1c30] block leading-tight">
-              {glucoseRecords.length > 0 ? 'Benchmark Test Data Active' : 'Clean User Logbook'}
-            </span>
-            <span className="text-[11px] text-[#3d4947] truncate block">
-              {glucoseRecords.length > 0
-                ? `${glucoseRecords.length} readings loaded. Log your own anytime!`
-                : 'No readings recorded yet. Tap + Log Glucose to start.'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {glucoseRecords.length > 0 && onClearData && (
-            <button
-              onClick={onClearData}
-              className="px-2.5 py-1 bg-white hover:bg-[#ffdad6] text-[#ba1a1a] rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer"
-              title="Clear all stored readings"
-            >
-              Clear Logbook
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* TOP HERO: Real-time Telemetry Card */}
       <div className="relative overflow-hidden bg-white rounded-3xl p-5 shadow-sm border border-[#e5eeff]">
         {/* Ambient target glow background tint */}

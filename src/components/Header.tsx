@@ -201,6 +201,16 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
+                <a
+                  href="/BetaKinetics_Technical_Report.docx"
+                  download="BetaKinetics_Technical_Report.docx"
+                  onClick={() => setShowMenu(false)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-[#eff4ff] text-left transition-colors cursor-pointer text-[#0b1c30]"
+                >
+                  <span className="material-symbols-outlined text-[18px] text-[#00685f]">description</span>
+                  <span>Download Research Report (.docx)</span>
+                </a>
+
                 {onLogout && (
                   <div className="pt-1 border-t border-[#e5eeff]">
                     <button

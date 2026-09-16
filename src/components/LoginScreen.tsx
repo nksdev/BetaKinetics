@@ -6,7 +6,7 @@ import { restorePatientBackup } from '../services/storageEngine';
 interface LoginScreenProps {
   initialProfile: PatientProfile;
   profilesList: PatientProfile[];
-  onLoginComplete: (profile: PatientProfile, loadSampleData: boolean) => void;
+  onLoginComplete: (profile: PatientProfile) => void;
   onSelectProfile: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
   onCancel?: () => void;
@@ -57,7 +57,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       ? initialProfile.activeInsulinIds
       : ['mixtard_30', 'actrapid']
   );
-  const [loadSampleData, setLoadSampleData] = useState<boolean>(true);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -75,7 +74,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setIcr(10);
     setDia(4.0);
     setSelectedInsulins([]); // Clean default: no insulins pre-selected
-    setLoadSampleData(false); // Clean default: unchecked so new profile starts with 0 readings
     setEditingProfileId(null);
     setViewMode('create');
   };
@@ -94,7 +92,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setIcr(prof.insulinToCarbRatio || 10);
     setDia(prof.activeDurationHours || 4.0);
     setSelectedInsulins(prof.activeInsulinIds || []);
-    setLoadSampleData(false);
     setEditingProfileId(prof.id || null);
     setViewMode('edit');
   };
@@ -137,7 +134,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       setupCompleted: true,
       lastLoginAt: new Date().toISOString()
     };
-    onLoginComplete(updated, false); // Removed loadSampleData boolean
+    onLoginComplete(updated);
   };
 
   const handleBackupFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,7 +154,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           if (onRestoreBackupSuccess) {
             onRestoreBackupSuccess();
           } else if (parsed.profile) {
-            onLoginComplete(parsed.profile, false);
+            onLoginComplete(parsed.profile);
           }
         } else {
           setRestoreStatus({ msg: res.message, isError: true });
@@ -615,28 +612,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   </div>
                 )}
               </div>
-
-              {/* Sample Readings Checkbox (only in create mode) */}
-              {viewMode === 'create' && (
-                <div className="p-3 bg-[#e1e0ff]/30 rounded-2xl border border-[#c0c1ff]/50">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={loadSampleData}
-                      onChange={(e) => setLoadSampleData(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded text-[#00685f] focus:ring-[#00685f] cursor-pointer"
-                    />
-                    <div className="text-[12px]">
-                      <span className="font-bold text-[#07006c] block">
-                        Pre-populate with sample clinical demo data (Optional)
-                      </span>
-                      <span className="text-[#3d4947] block text-[11px] leading-snug mt-0.5">
-                        Leave unchecked to start with a clean, blank logbook (0 glucose readings, 0 insulin logs). Check only if you want to explore sample benchmark data.
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              )}
 
               {/* Actions */}
               <div className="pt-2 flex flex-col gap-2">

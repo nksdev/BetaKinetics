@@ -367,6 +367,7 @@ export default function App() {
         {activeTab === 'insulin-iob' && (
           <InsulinIobView
             profile={profile}
+            insulinRecords={insulinRecords}
             onOpenParameterModal={() => setShowEditParameters(true)}
           />
         )}

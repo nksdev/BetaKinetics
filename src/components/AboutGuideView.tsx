@@ -145,6 +145,41 @@ export const AboutGuideView: React.FC<AboutGuideViewProps> = ({
         </div>
       </div>
 
+      {/* TECHNICAL RESEARCH & ENGINEERING REPORT DOWNLOAD CARD */}
+      <div className="p-4 rounded-3xl bg-white border border-[#e5eeff] shadow-sm flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-[#eff4ff] text-[#00685f] flex items-center justify-center">
+              <span className="material-symbols-outlined text-[19px]">description</span>
+            </div>
+            <div>
+              <span className="font-['Plus_Jakarta_Sans',sans-serif] font-bold text-[15px] text-[#0b1c30] block leading-tight">
+                Complete Project &amp; Research Report
+              </span>
+              <span className="text-[11px] text-[#3d4947]">
+                Comprehensive Academic Document (.docx)
+              </span>
+            </div>
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-[#e1e0ff] text-[#07006c] text-[10px] font-bold">
+            .DOCX
+          </span>
+        </div>
+
+        <p className="text-[12px] text-[#3d4947] leading-relaxed">
+          Covers Problem Statement, Literature Survey (Mudaliar, Berger-Rodbard, Wilinska, Battelino consensus), Mathematical Formulations, Subcutaneous Biphasic PK modeling, System Architecture, Clinical Safety Guardrails, and Peer-Reviewed Citations.
+        </p>
+
+        <a
+          href="/BetaKinetics_Technical_Report.docx"
+          download="BetaKinetics_Technical_Report.docx"
+          className="w-full py-2.5 px-4 rounded-full bg-[#00685f] hover:bg-[#005049] text-white text-[12px] font-bold transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[18px]">download</span>
+          <span>Download Technical Report (.docx)</span>
+        </a>
+      </div>
+
       {/* HOW TO USE THIS APP (STEP-BY-STEP WORKFLOW) */}
       <div className="p-4 rounded-3xl bg-white border border-[#e5eeff] shadow-sm flex flex-col gap-3.5">
         <div className="flex items-center gap-2">

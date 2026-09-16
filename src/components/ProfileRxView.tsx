@@ -311,6 +311,34 @@ export const ProfileRxView: React.FC<ProfileRxViewProps> = ({
         </div>
       </div>
 
+      {/* Clinical Engineering & Research Report (.docx) Download Card */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-[#e5eeff] space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="material-symbols-outlined text-[#00685f] text-[20px]">description</span>
+            <h3 className="font-['Plus_Jakarta_Sans',sans-serif] text-[16px] font-bold text-[#0b1c30]">
+              Clinical Engineering Report (.docx)
+            </h3>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-[#e1e0ff] text-[#07006c] font-bold">
+            Full Specification
+          </span>
+        </div>
+
+        <p className="text-[12px] text-[#3d4947] leading-relaxed">
+          Comprehensive project report (.docx) detailing problem statement, literature survey (Mudaliar bi-exponential, Berger-Rodbard, Wilinska, Battelino consensus), mathematical algorithm derivations, subcutaneous biphasic absorption models, and peer-reviewed research citations.
+        </p>
+
+        <a
+          href="/BetaKinetics_Technical_Report.docx"
+          download="BetaKinetics_Technical_Report.docx"
+          className="w-full py-2.5 px-4 rounded-full bg-[#00685f] hover:bg-[#005049] text-white text-[12px] font-bold transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[18px]">download</span>
+          <span>Download Technical Report (.docx)</span>
+        </a>
+      </div>
+
       {/* SQLite Database & 90-Day Rolling Storage Management */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-[#e5eeff] space-y-3">
         <div className="flex items-center justify-between">
