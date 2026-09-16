@@ -1,0 +1,7 @@
+{
+  "name": "BetaKinetics T1D",
+  "description": "Type 1 Diabetes glucose monitoring, insulin pharmacokinetics, and clinical decision-support system with rolling 90-day analytics and IOB anti-stacking safety engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
