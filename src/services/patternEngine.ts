@@ -27,16 +27,42 @@ export function analyzeRoutineSlots(records: GlucoseRecord[]): SlotAnalysis[] {
   return slotDefinitions.map(def => {
     const slotRecords = records.filter(r => r.slot === def.slot);
 
-    // Group by dayIndex (1, 2, 3) if available or by date
-    const d1Record = slotRecords.find(r => r.dayIndex === 1) || slotRecords[0];
-    const d2Record = slotRecords.find(r => r.dayIndex === 2) || slotRecords[1];
-    const d3Record = slotRecords.find(r => r.dayIndex === 3) || slotRecords[2];
+    // If no records exist for this slot, return a clean empty state with NO mock values
+    if (slotRecords.length === 0) {
+      return {
+        slot: def.slot,
+        label: def.label,
+        icon: def.icon,
+        avgValue: 0,
+        hasData: false,
+        inRange: false,
+        statusText: 'No Data',
+        patternAlert: false,
+        patternMessage: undefined,
+        dayValues: {
+          day1: undefined,
+          day2: undefined,
+          day3: undefined
+        },
+        diffVsBasal: undefined
+      };
+    }
 
-    const d1Val = d1Record?.value || 140;
-    const d2Val = d2Record?.value || 145;
-    const d3Val = d3Record?.value || 142;
+    // Sort chronologically descending
+    const sorted = [...slotRecords].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
 
-    const values = slotRecords.length > 0 ? slotRecords.map(r => r.value) : [d1Val, d2Val, d3Val];
+    // Group by dayIndex (1, 2, 3) if available or recent entries
+    const d1Record = slotRecords.find(r => r.dayIndex === 1) || sorted[2];
+    const d2Record = slotRecords.find(r => r.dayIndex === 2) || sorted[1];
+    const d3Record = slotRecords.find(r => r.dayIndex === 3) || sorted[0];
+
+    const d1Val = d1Record?.value;
+    const d2Val = d2Record?.value;
+    const d3Val = d3Record?.value;
+
+    const values = slotRecords.map(r => r.value);
     const avg = Math.round(values.reduce((acc, v) => acc + v, 0) / values.length);
 
     const inRange = avg >= 70 && avg <= 180;
@@ -44,8 +70,16 @@ export function analyzeRoutineSlots(records: GlucoseRecord[]): SlotAnalysis[] {
     let patternMessage = undefined;
     let diffVsBasal = undefined;
 
-    // Detect pre-breakfast elevation pattern (Dawn phenomenon / morning elevation across 3 consecutive days)
-    if (def.slot === 'before_breakfast' && d1Val >= 150 && d2Val >= 150 && d3Val >= 150) {
+    // Detect pre-breakfast elevation pattern (Dawn phenomenon across 3 recorded mornings)
+    if (
+      def.slot === 'before_breakfast' &&
+      d1Val !== undefined &&
+      d2Val !== undefined &&
+      d3Val !== undefined &&
+      d1Val >= 150 &&
+      d2Val >= 150 &&
+      d3Val >= 150
+    ) {
       patternAlert = true;
       patternMessage = 'Pattern: Elevated 3 consecutive mornings';
       diffVsBasal = Math.round(avg - 140);
@@ -61,6 +95,7 @@ export function analyzeRoutineSlots(records: GlucoseRecord[]): SlotAnalysis[] {
       label: def.label,
       icon: def.icon,
       avgValue: avg,
+      hasData: true,
       inRange,
       statusText,
       patternAlert,

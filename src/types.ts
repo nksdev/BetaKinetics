@@ -174,11 +174,12 @@ export interface SlotAnalysis {
   label: string;
   icon: string;
   avgValue: number;
+  hasData?: boolean;
   inRange: boolean;
   statusText: string;
   patternAlert: boolean;
   patternMessage?: string;
-  dayValues: { day1: number; day2: number; day3: number };
+  dayValues: { day1?: number; day2?: number; day3?: number };
   diffVsBasal?: number;
 }
 

@@ -1,14 +1,17 @@
 import React from 'react';
-import { PatientProfile } from '../types';
+import { GlucoseRecord, PatientProfile } from '../types';
+import { calculatePeriodAnalysis } from '../services/analysisEngine';
 
 interface AgpExportModalProps {
   profile: PatientProfile;
+  glucoseRecords?: GlucoseRecord[];
   isOpen: boolean;
   onClose: () => void;
 }
 
 export const AgpExportModal: React.FC<AgpExportModalProps> = ({
   profile,
+  glucoseRecords = [],
   isOpen,
   onClose
 }) => {
@@ -17,6 +20,33 @@ export const AgpExportModal: React.FC<AgpExportModalProps> = ({
   const handlePrint = () => {
     window.print();
   };
+
+  const hasData = glucoseRecords.length > 0;
+  const analysis = calculatePeriodAnalysis(glucoseRecords, 90, '90-Day Rolling');
+
+  // Compute 24h curve points
+  const points = glucoseRecords
+    .map(r => {
+      const d = new Date(r.timestamp);
+      const minutes = d.getHours() * 60 + d.getMinutes();
+      const x = Math.max(10, Math.min(310, (minutes / 1440) * 320));
+      let y: number;
+      if (r.value >= 180) {
+        y = 30 - ((Math.min(r.value, 280) - 180) / 100) * 20;
+      } else if (r.value <= 70) {
+        y = 75 + ((70 - Math.max(r.value, 40)) / 30) * 18;
+      } else {
+        y = 75 - ((r.value - 70) / 110) * 45;
+      }
+      y = Math.max(10, Math.min(92, y));
+      return { ...r, x, y };
+    })
+    .sort((a, b) => a.x - b.x);
+
+  const curvePath =
+    points.length > 1
+      ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+      : '';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 print:p-0 print:static print:bg-white">
@@ -76,7 +106,7 @@ export const AgpExportModal: React.FC<AgpExportModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-[#eff4ff] border border-[#e5eeff]">
               <span className="text-[10px] text-[#3d4947] block font-bold uppercase">Time in Range (70-180)</span>
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[26px] font-extrabold text-[#006947]">
-                88%
+                {hasData ? `${analysis.tirPercent}%` : '—%'}
               </span>
               <span className="text-[10px] text-[#006947] block font-semibold">Consensus Goal: &gt; 70%</span>
             </div>
@@ -84,7 +114,7 @@ export const AgpExportModal: React.FC<AgpExportModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-[#eff4ff] border border-[#e5eeff]">
               <span className="text-[10px] text-[#3d4947] block font-bold uppercase">Mean Glucose</span>
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[26px] font-extrabold text-[#0b1c30]">
-                148
+                {hasData ? analysis.avgGlucose : '—'}
               </span>
               <span className="text-[10px] text-[#3d4947] block font-semibold">mg/dL</span>
             </div>
@@ -92,7 +122,7 @@ export const AgpExportModal: React.FC<AgpExportModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-[#eff4ff] border border-[#e5eeff]">
               <span className="text-[10px] text-[#3d4947] block font-bold uppercase">Estimated GMI</span>
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[26px] font-extrabold text-[#4648d4]">
-                6.8%
+                {hasData ? `${analysis.gmi || analysis.projectedA1c}%` : '—%'}
               </span>
               <span className="text-[10px] text-[#4648d4] block font-semibold">Projected HbA1c</span>
             </div>
@@ -106,23 +136,37 @@ export const AgpExportModal: React.FC<AgpExportModalProps> = ({
             <div className="space-y-1.5 text-[12px]">
               <div className="flex items-center justify-between">
                 <span>Very High (&gt; 250 mg/dL)</span>
-                <span className="font-bold">1.2% (Goal &lt; 5%)</span>
+                <span className="font-bold">
+                  {hasData ? `${analysis.veryHighPercent ?? 0}% (Goal < 5%)` : '—% (Goal < 5%)'}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>High (181–250 mg/dL)</span>
-                <span className="font-bold">10.8%</span>
+                <span className="font-bold">
+                  {hasData
+                    ? `${Math.max(0, analysis.hyperPercent - (analysis.veryHighPercent || 0))}%`
+                    : '—%'}
+                </span>
               </div>
               <div className="flex items-center justify-between text-[#006947]">
                 <span className="font-semibold">Target Range (70–180 mg/dL)</span>
-                <span className="font-bold">88.0% (Goal &gt; 70%)</span>
+                <span className="font-bold">
+                  {hasData ? `${analysis.tirPercent}% (Goal > 70%)` : '—% (Goal > 70%)'}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Low (54–69 mg/dL)</span>
-                <span className="font-bold text-[#ba1a1a]">0.0% (Goal &lt; 4%)</span>
+                <span className="font-bold text-[#ba1a1a]">
+                  {hasData
+                    ? `${Math.max(0, analysis.hypoPercent - (analysis.veryLowPercent || 0))}% (Goal < 4%)`
+                    : '—% (Goal < 4%)'}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Very Low (&lt; 54 mg/dL)</span>
-                <span className="font-bold text-[#ba1a1a]">0.0% (Goal &lt; 1%)</span>
+                <span className="font-bold text-[#ba1a1a]">
+                  {hasData ? `${analysis.veryLowPercent ?? 0}% (Goal < 1%)` : '—% (Goal < 1%)'}
+                </span>
               </div>
             </div>
           </div>
@@ -139,14 +183,38 @@ export const AgpExportModal: React.FC<AgpExportModalProps> = ({
                 <rect x="0" y="30" width="320" height="45" fill="#e8f5e9" opacity="0.8" />
                 <line x1="0" y1="30" x2="320" y2="30" stroke="#81c784" strokeDasharray="3 3" />
                 <line x1="0" y1="75" x2="320" y2="75" stroke="#81c784" strokeDasharray="3 3" />
-                {/* 50th Percentile Curve */}
-                <path
-                  d="M 0,55 Q 80,35 160,60 T 320,50"
-                  fill="none"
-                  stroke="#00685f"
-                  strokeWidth="3"
-                />
+                {/* Real Modal Curve */}
+                {curvePath && (
+                  <path
+                    d={curvePath}
+                    fill="none"
+                    stroke="#00685f"
+                    strokeWidth="3"
+                  />
+                )}
+                {/* Real Dots */}
+                {points.map((p, i) => (
+                  <circle
+                    key={p.id || i}
+                    cx={p.x}
+                    cy={p.y}
+                    r="3.5"
+                    fill={p.value < 70 ? '#ba1a1a' : p.value > 180 ? '#4648d4' : '#006947'}
+                    stroke="#ffffff"
+                    strokeWidth="1.5"
+                  />
+                ))}
               </svg>
+
+              {!hasData && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-white/75 backdrop-blur-2xs rounded-xl">
+                  <span className="text-[12px] font-bold text-[#0b1c30]">No Telemetry Logs</span>
+                  <p className="text-[10px] text-[#3d4947] mt-0.5">
+                    Log blood glucose tests to generate your 24-hour ambulatory glucose curve.
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-between text-[9px] text-[#3d4947] mt-1 font-medium">
                 <span>12 AM</span>
                 <span>4 AM</span>

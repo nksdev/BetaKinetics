@@ -1,5 +1,7 @@
 import { InsulinProfile } from '../types';
 
+export type { InsulinProfile };
+
 export const INSULIN_DATABASE: InsulinProfile[] = [
   {
     id: 'mixtard_30',

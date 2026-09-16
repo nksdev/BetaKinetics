@@ -41,6 +41,38 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const clinicalPatterns = detectClinicalPatterns(glucoseRecords);
   const daysUsed = getStorageDaysUsed();
 
+  const hasData = analysis.totalReadings > 0;
+
+  // Filter records in current selected period for modal dispersion graph
+  const periodCutoff = Date.now() - selectedPeriod * 24 * 60 * 60 * 1000;
+  const periodRecords = glucoseRecords.filter(r => new Date(r.timestamp).getTime() >= periodCutoff);
+
+  // Process data points for 24-hour cycle modal curve
+  const graphPoints = periodRecords
+    .map(r => {
+      const d = new Date(r.timestamp);
+      const minutes = d.getHours() * 60 + d.getMinutes();
+      const x = Math.max(12, Math.min(328, (minutes / 1440) * 340));
+      let y: number;
+      if (r.value >= 180) {
+        y = 50 - ((Math.min(r.value, 280) - 180) / 100) * 35;
+      } else if (r.value <= 70) {
+        y = 120 + ((70 - Math.max(r.value, 40)) / 30) * 25;
+      } else {
+        y = 120 - ((r.value - 70) / 110) * 70;
+      }
+      y = Math.max(18, Math.min(145, y));
+      return { ...r, x, y };
+    })
+    .sort((a, b) => a.x - b.x);
+
+  const graphPath =
+    graphPoints.length > 1
+      ? graphPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ')
+      : '';
+
+  const hasDawnSpike = clinicalPatterns.some(p => p.type === 'dawn_phenomenon');
+
   return (
     <div className="flex flex-col w-full max-w-lg mx-auto px-4 pt-3 pb-24 space-y-4">
       {/* Micro-Header Context & Range Selector */}
@@ -109,27 +141,29 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <span className="px-2 py-0.5 rounded-full bg-[#e1e0ff] text-[#07006c] text-[10px] font-bold uppercase tracking-wider">
                 Active Analysis
               </span>
-              <span className="text-[11px] text-[#3d4947] font-medium">{analysis.totalReadings} telemetry logs</span>
+              <span className="text-[11px] text-[#3d4947] font-medium">
+                {analysis.totalReadings} telemetry log{analysis.totalReadings === 1 ? '' : 's'}
+              </span>
             </div>
             <div className="flex items-baseline space-x-2 mt-1">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[46px] font-extrabold text-[#0b1c30] leading-none">
-                {analysis.avgGlucose || '—'}
+                {hasData ? analysis.avgGlucose : '—'}
               </span>
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[16px] font-bold text-[#3d4947]">
                 mg/dL
               </span>
               <span className="text-[12px] text-[#006947] font-semibold flex items-center ml-1">
                 <span className="material-symbols-outlined text-[16px]">trending_flat</span>
-                <span>Target Band</span>
+                <span>{hasData ? 'Target Band' : 'Target 70–180 mg/dL'}</span>
               </span>
             </div>
             <p className="text-[12px] text-[#3d4947] mt-0.5">
-              {analysis.label} Mean Glucose
+              {hasData ? `${analysis.label} Mean Glucose` : 'No blood sugar readings recorded for this window'}
             </p>
           </div>
 
           {/* Day-by-Day Micro Pills for 3-Day Focus */}
-          {selectedPeriod === 3 && (analysis.day1Avg || analysis.day2Avg || analysis.day3Avg) && (
+          {selectedPeriod === 3 && hasData && (analysis.day1Avg || analysis.day2Avg || analysis.day3Avg) && (
             <div className="flex flex-col items-end space-y-1">
               <div className="flex items-center space-x-1.5 bg-[#eff4ff] px-2 py-0.8 rounded-lg">
                 <span className="text-[10px] text-[#3d4947] font-medium">D1</span>
@@ -155,48 +189,63 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               Time In Range (70–180 mg/dL)
             </span>
             <span className="text-[#006947] font-bold">
-              {analysis.tirPercent}%
+              {hasData ? `${analysis.tirPercent}%` : '—%'}
             </span>
           </div>
 
           {/* Segmented Bar */}
-          <div className="w-full h-3 rounded-full bg-[#e5eeff] flex overflow-hidden p-0.5 gap-0.5">
-            {analysis.hypoPercent > 0 && (
+          {hasData ? (
+            <div className="w-full h-3 rounded-full bg-[#e5eeff] flex overflow-hidden p-0.5 gap-0.5">
+              {analysis.hypoPercent > 0 && (
+                <div
+                  className="h-full bg-[#ba1a1a] rounded-full transition-all duration-700"
+                  style={{ width: `${analysis.hypoPercent}%` }}
+                />
+              )}
               <div
-                className="h-full bg-[#ba1a1a] rounded-full transition-all duration-700"
-                style={{ width: `${analysis.hypoPercent}%` }}
+                className="h-full bg-[#006947] rounded-full transition-all duration-700"
+                style={{ width: `${analysis.tirPercent}%` }}
               />
-            )}
-            <div
-              className="h-full bg-[#006947] rounded-full transition-all duration-700"
-              style={{ width: `${analysis.tirPercent}%` }}
-            />
-            {analysis.hyperPercent > 0 && (
-              <div
-                className="h-full bg-[#4648d4] rounded-full transition-all duration-700"
-                style={{ width: `${analysis.hyperPercent}%` }}
-              />
-            )}
-          </div>
+              {analysis.hyperPercent > 0 && (
+                <div
+                  className="h-full bg-[#4648d4] rounded-full transition-all duration-700"
+                  style={{ width: `${analysis.hyperPercent}%` }}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="w-full h-3 rounded-full bg-[#eff4ff] border border-[#e5eeff] flex items-center justify-center">
+              <span className="text-[9px] text-[#3d4947] font-medium">No readings recorded yet</span>
+            </div>
+          )}
 
           {/* TIR Legend breakdown */}
           <div className="flex items-center justify-between text-[11px] pt-0.5 px-0.5">
             <div className="flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-[#ba1a1a]" />
               <span className="text-[#3d4947]">
-                Low (&lt;70): <strong className="text-[#0b1c30] font-semibold">{analysis.hypoPercent}%</strong>
+                Low (&lt;70):{' '}
+                <strong className="text-[#0b1c30] font-semibold">
+                  {hasData ? `${analysis.hypoPercent}%` : '—%'}
+                </strong>
               </span>
             </div>
             <div className="flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-[#006947]" />
               <span className="text-[#3d4947]">
-                In Range: <strong className="text-[#0b1c30] font-semibold">{analysis.tirPercent}%</strong>
+                In Range:{' '}
+                <strong className="text-[#0b1c30] font-semibold">
+                  {hasData ? `${analysis.tirPercent}%` : '—%'}
+                </strong>
               </span>
             </div>
             <div className="flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-[#4648d4]" />
               <span className="text-[#3d4947]">
-                High (&gt;180): <strong className="text-[#0b1c30] font-semibold">{analysis.hyperPercent}%</strong>
+                High (&gt;180):{' '}
+                <strong className="text-[#0b1c30] font-semibold">
+                  {hasData ? `${analysis.hyperPercent}%` : '—%'}
+                </strong>
               </span>
             </div>
           </div>
@@ -208,7 +257,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <span className="text-[10px] text-[#3d4947] font-semibold block">GMI (Est. HbA1c)</span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold text-[#0b1c30]">
-                {analysis.gmi || analysis.projectedA1c || '—'}%
+                {hasData ? `${analysis.gmi || analysis.projectedA1c}%` : '—'}
               </span>
             </div>
             <span className="text-[9px] text-[#00685f] font-medium">Bergenstal Formula</span>
@@ -219,25 +268,31 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <span className="text-[10px] text-[#3d4947] font-semibold block">Variability (CV)</span>
               <span
                 className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full ${
-                  (analysis.cv || 0) <= 36 ? 'bg-[#006947]/10 text-[#006947]' : 'bg-[#ba1a1a]/10 text-[#ba1a1a]'
+                  !hasData
+                    ? 'bg-[#e5eeff] text-[#3d4947]'
+                    : (analysis.cv || 0) <= 36
+                    ? 'bg-[#006947]/10 text-[#006947]'
+                    : 'bg-[#ba1a1a]/10 text-[#ba1a1a]'
                 }`}
               >
-                {(analysis.cv || 0) <= 36 ? '≤36% Target' : '>36% High'}
+                {!hasData ? 'No Data' : (analysis.cv || 0) <= 36 ? '≤36% Target' : '>36% High'}
               </span>
             </div>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold text-[#0b1c30]">
-                {analysis.cv || '0'}%
+                {hasData ? `${analysis.cv}%` : '—'}
               </span>
             </div>
-            <span className="text-[9px] text-[#3d4947]">SD: ±{analysis.sd || 0} mg/dL</span>
+            <span className="text-[9px] text-[#3d4947]">
+              {hasData ? `SD: ±${analysis.sd || 0} mg/dL` : 'Need logs'}
+            </span>
           </div>
 
           <div className="p-2.5 rounded-2xl bg-[#eff4ff]">
             <span className="text-[10px] text-[#3d4947] font-semibold block">Very High (&gt;250)</span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold text-[#0b1c30]">
-                {analysis.veryHighPercent ?? 0}%
+                {hasData ? `${analysis.veryHighPercent ?? 0}%` : '—'}
               </span>
             </div>
             <span className="text-[9px] text-[#3d4947]">Target &lt;5%</span>
@@ -247,7 +302,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <span className="text-[10px] text-[#3d4947] font-semibold block">Very Low (&lt;54)</span>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold text-[#ba1a1a]">
-                {analysis.veryLowPercent ?? 0}%
+                {hasData ? `${analysis.veryLowPercent ?? 0}%` : '—'}
               </span>
             </div>
             <span className="text-[9px] text-[#3d4947]">Target &lt;1%</span>
@@ -260,9 +315,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-['Plus_Jakarta_Sans',sans-serif] text-[16px] font-bold text-[#0b1c30]">
-              3-Day Modal Dispersion
+              {currentTabObj.label} Modal Dispersion
             </h3>
-            <p className="text-[11px] text-[#3d4947]">Median curve against target safe band</p>
+            <p className="text-[11px] text-[#3d4947]">
+              {graphPoints.length > 0
+                ? `${graphPoints.length} logged check${graphPoints.length === 1 ? '' : 's'} across 24h timeline`
+                : 'Target safe band reference (70–180 mg/dL)'}
+            </p>
           </div>
           <div className="flex items-center space-x-1 bg-[#eff4ff] px-2.5 py-1 rounded-full text-[#006947] text-[11px] font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-[#006947]" />
@@ -270,7 +329,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
         </div>
 
-        {/* Inline Telemetry SVG Chart matching Screenshot 4 */}
+        {/* Inline Telemetry SVG Chart */}
         <div className="relative w-full h-44 mt-2">
           <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 340 160">
             <defs>
@@ -302,35 +361,76 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               70
             </text>
 
-            {/* Shaded Dawn Spike Zone (05:00 - 08:00) */}
-            <rect fill="#4648d4" fillOpacity="0.07" height="110" rx="4" width="55" x="70" y="30" />
-            <text fill="#4648d4" fontFamily="Inter" fontSize="7" fontWeight="700" x="73" y="42">
-              DAWN DRIFT
-            </text>
+            {/* Shaded Dawn Spike Zone (05:00 - 08:00) ONLY when clinically suspected */}
+            {hasDawnSpike && (
+              <>
+                <rect fill="#4648d4" fillOpacity="0.07" height="110" rx="4" width="55" x="70" y="30" />
+                <text fill="#4648d4" fontFamily="Inter" fontSize="7" fontWeight="700" x="73" y="42">
+                  DAWN DRIFT
+                </text>
+              </>
+            )}
 
-            {/* 3-Day Modal Continuous Glycemic Spline */}
-            <path
-              d="M 0,95 C 30,90 50,75 75,54 C 95,42 110,40 130,68 C 150,95 170,110 195,108 C 220,105 240,65 265,58 C 290,52 315,70 340,62"
-              fill="none"
-              stroke="url(#lineCurveGrad)"
-              strokeLinecap="round"
-              strokeWidth="3"
-            />
+            {/* Dynamic Glycemic Modal Spline from Real Readings */}
+            {graphPath && (
+              <path
+                d={graphPath}
+                fill="none"
+                stroke="url(#lineCurveGrad)"
+                strokeLinecap="round"
+                strokeWidth="3"
+              />
+            )}
 
-            {/* Day Excursion Dots */}
-            {/* Dawn Spike Point (168 mg/dL) */}
-            <circle cx="95" cy="46" fill="#4648d4" r="4.5" stroke="#ffffff" strokeWidth="2" />
-            {/* Post-Dinner peak (182 mg/dL transient) */}
-            <circle cx="265" cy="58" fill="#4648d4" r="4.5" stroke="#ffffff" strokeWidth="2" />
-            {/* Pre-Lunch Dip (122 mg/dL) */}
-            <circle cx="195" cy="108" fill="#006947" r="4.5" stroke="#ffffff" strokeWidth="2" />
+            {/* Real Data Points */}
+            {graphPoints.map((pt, i) => {
+              const isHypo = pt.value < 70;
+              const isHyper = pt.value > 180;
+              const dotColor = isHypo ? '#ba1a1a' : isHyper ? '#4648d4' : '#006947';
+
+              return (
+                <g key={pt.id || i}>
+                  <circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r="4.5"
+                    fill={dotColor}
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={pt.x}
+                    y={Math.max(12, pt.y - 6)}
+                    fontSize="8"
+                    fontWeight="700"
+                    textAnchor="middle"
+                    fill="#0b1c30"
+                  >
+                    {pt.value}
+                  </text>
+                </g>
+              );
+            })}
           </svg>
+
+          {/* Clean Empty State Overlay when no readings exist */}
+          {graphPoints.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-white/70 backdrop-blur-2xs rounded-2xl">
+              <div className="w-10 h-10 rounded-full bg-[#eff4ff] flex items-center justify-center text-[#00685f] mb-1.5">
+                <span className="material-symbols-outlined text-[20px]">show_chart</span>
+              </div>
+              <span className="text-[13px] font-bold text-[#0b1c30]">No Readings Recorded</span>
+              <p className="text-[11px] text-[#3d4947] max-w-xs mt-0.5 leading-relaxed">
+                Log your blood sugar in the Log &amp; Dose tab to view your modal curve and continuous trend.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Timeline X-Axis Labels */}
         <div className="flex items-center justify-between text-[#3d4947] text-[10px] px-1 border-t border-[#e5eeff] pt-2 font-medium">
           <span>00:00 (Night)</span>
-          <span className="text-[#4648d4] font-bold">06:00 (Dawn)</span>
+          <span className={hasDawnSpike ? 'text-[#4648d4] font-bold' : ''}>06:00 (Dawn)</span>
           <span>12:00 (Noon)</span>
           <span>18:00 (Dinner)</span>
           <span>23:59</span>
@@ -344,13 +444,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <h3 className="font-['Plus_Jakarta_Sans',sans-serif] text-[16px] font-bold text-[#0b1c30]">
               Routine Slot Breakdown
             </h3>
-            <p className="text-[11px] text-[#3d4947]">3-day paired pre &amp; post meal analysis</p>
+            <p className="text-[11px] text-[#3d4947]">Paired pre &amp; post meal analysis from your records</p>
           </div>
           <span className="text-[11px] text-[#3d4947] font-semibold">6 Target Slots</span>
         </div>
 
         <div className="grid grid-cols-1 gap-2.5">
           {routineSlots.map(slot => {
+            const hasSlotData = slot.hasData && slot.avgValue > 0;
+
             return (
               <div
                 key={slot.slot}
@@ -362,37 +464,51 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                         slot.patternAlert
                           ? 'bg-[#ffdad6]/60 text-[#ba1a1a]'
-                          : 'bg-[#eff4ff] text-[#3d4947]'
+                          : hasSlotData
+                          ? 'bg-[#eff4ff] text-[#3d4947]'
+                          : 'bg-[#eff4ff]/60 text-[#bcc9c6]'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[20px]">{slot.icon}</span>
+                      <span className="material-symbols-outlined text-[20px]">
+                        {hasSlotData ? slot.icon : 'schedule'}
+                      </span>
                     </div>
                     <div>
                       <div className="flex items-center space-x-1.5">
                         <span className="text-[13px] text-[#0b1c30] font-bold">{slot.label}</span>
                         {slot.patternAlert ? (
                           <span className="material-symbols-outlined text-[16px] text-[#ba1a1a]">warning</span>
-                        ) : (
+                        ) : hasSlotData ? (
                           <span className="material-symbols-outlined text-[16px] text-[#006947]">
                             check_circle
+                          </span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[16px] text-[#bcc9c6]">
+                            radio_button_unchecked
                           </span>
                         )}
                       </div>
                       <p
                         className={`text-[11px] ${
-                          slot.patternAlert ? 'text-[#ba1a1a] font-semibold' : 'text-[#3d4947]'
+                          slot.patternAlert
+                            ? 'text-[#ba1a1a] font-semibold'
+                            : hasSlotData
+                            ? 'text-[#3d4947]'
+                            : 'text-[#6d7a77]'
                         }`}
                       >
                         {slot.patternMessage ||
-                          (slot.slot === 'after_breakfast'
-                            ? 'Optimal post-prandial absorption'
-                            : slot.slot === 'before_lunch'
-                            ? 'Target baseline reached'
-                            : slot.slot === 'after_lunch'
-                            ? 'Controlled carb recovery'
-                            : slot.slot === 'before_dinner'
-                            ? 'Predictable IOB clearance'
-                            : 'Evening stabilization')}
+                          (hasSlotData
+                            ? slot.slot === 'after_breakfast'
+                              ? 'Optimal post-prandial absorption'
+                              : slot.slot === 'before_lunch'
+                              ? 'Target baseline reached'
+                              : slot.slot === 'after_lunch'
+                              ? 'Controlled carb recovery'
+                              : slot.slot === 'before_dinner'
+                              ? 'Predictable IOB clearance'
+                              : 'Evening stabilization'
+                            : 'No readings logged for this slot')}
                       </p>
                     </div>
                   </div>
@@ -400,34 +516,40 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <div className="text-right">
                     <span
                       className={`font-['Plus_Jakarta_Sans',sans-serif] text-[18px] font-bold ${
-                        slot.patternAlert
+                        !hasSlotData
+                          ? 'text-[#6d7a77]'
+                          : slot.patternAlert
                           ? 'text-[#ba1a1a]'
                           : slot.statusText === 'Optimal'
                           ? 'text-[#006947]'
                           : 'text-[#0b1c30]'
                       }`}
                     >
-                      {slot.avgValue}
+                      {hasSlotData ? slot.avgValue : '—'}
                     </span>
                     <span
                       className={`text-[10px] block font-semibold ${
-                        slot.patternAlert
+                        !hasSlotData
+                          ? 'text-[#6d7a77]'
+                          : slot.patternAlert
                           ? 'text-[#3d4947]'
                           : slot.statusText === 'Optimal'
                           ? 'text-[#006947]'
                           : 'text-[#006947]'
                       }`}
                     >
-                      {slot.patternAlert ? 'Avg mg/dL' : slot.statusText}
+                      {!hasSlotData ? 'No Data' : slot.patternAlert ? 'Avg mg/dL' : slot.statusText}
                     </span>
                   </div>
                 </div>
 
-                {/* 3-Day Micro Readouts for Pre-Breakfast or other slot */}
+                {/* Micro Readouts for Pre-Breakfast or other slot */}
                 <div className="flex items-center justify-between bg-[#eff4ff] p-2 rounded-xl text-[11px]">
                   <div className="flex items-center space-x-1">
                     <span className="text-[#3d4947]">D1:</span>
-                    <span className="text-[#0b1c30] font-semibold">{slot.dayValues.day1}</span>
+                    <span className="text-[#0b1c30] font-semibold">
+                      {slot.dayValues.day1 ?? '—'}
+                    </span>
                   </div>
                   <span className="text-[#bcc9c6]">•</span>
                   <div className="flex items-center space-x-1">
@@ -437,13 +559,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                         slot.patternAlert ? 'text-[#ba1a1a]' : 'text-[#0b1c30]'
                       }`}
                     >
-                      {slot.dayValues.day2}
+                      {slot.dayValues.day2 ?? '—'}
                     </span>
                   </div>
                   <span className="text-[#bcc9c6]">•</span>
                   <div className="flex items-center space-x-1">
                     <span className="text-[#3d4947]">D3:</span>
-                    <span className="text-[#0b1c30] font-semibold">{slot.dayValues.day3}</span>
+                    <span className="text-[#0b1c30] font-semibold">
+                      {slot.dayValues.day3 ?? '—'}
+                    </span>
                   </div>
                   {slot.diffVsBasal && (
                     <span className="px-1.5 py-0.5 rounded bg-[#ffdad6] text-[#93000a] text-[10px] font-bold">
@@ -469,7 +593,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             </h3>
           </div>
           <span className="px-2 py-0.5 rounded-full bg-[#eff4ff] text-[#3d4947] text-[10px] font-bold">
-            {clinicalPatterns.length > 0 ? `${clinicalPatterns.length} Pattern(s)` : 'Optimal'}
+            {glucoseRecords.length === 0
+              ? 'No Logs'
+              : clinicalPatterns.length > 0
+              ? `${clinicalPatterns.length} Pattern(s)`
+              : 'Optimal'}
           </span>
         </div>
 
@@ -512,13 +640,23 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
             ))}
           </div>
+        ) : glucoseRecords.length === 0 ? (
+          <div className="flex items-start space-x-3 p-3 bg-[#eff4ff] rounded-2xl border border-[#e5eeff]">
+            <span className="material-symbols-outlined text-[#3d4947] text-[22px] mt-0.5">info</span>
+            <div className="space-y-0.5">
+              <p className="text-[13px] text-[#0b1c30] font-bold">No Telemetry Data Yet</p>
+              <p className="text-[12px] text-[#3d4947] leading-relaxed">
+                Log blood glucose readings across routine slots to enable automatic detection of dawn phenomenon, nocturnal stability, and postprandial excursions.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="flex items-start space-x-3 p-3 bg-[#eff4ff] rounded-2xl border border-[#e5eeff]">
             <span className="material-symbols-outlined text-[#006947] text-[22px] mt-0.5">verified</span>
             <div className="space-y-0.5">
               <p className="text-[13px] text-[#0b1c30] font-bold">Stable Glycemic Control</p>
               <p className="text-[12px] text-[#3d4947] leading-relaxed">
-                No acute glycemic excursion patterns or nocturnal dips detected across the active log window.
+                Across your {glucoseRecords.length} recorded reading{glucoseRecords.length === 1 ? '' : 's'}, no acute glycemic excursion patterns or nocturnal dips were detected.
               </p>
             </div>
           </div>

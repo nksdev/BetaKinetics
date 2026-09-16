@@ -126,7 +126,7 @@ export function calculateCurrentIob(
     const remainingUnits = record.doseUnits * fraction;
     if (remainingUnits > 0.01) {
       let prandialRemaining = 0;
-      if (profile.category === 'rapid' || profile.category === 'regular' || profile.category === 'short') {
+      if (profile.category === 'rapid' || profile.category === 'regular') {
          prandialRemaining = remainingUnits;
       } else if (profile.category === 'premixed' && profile.biphasicRatio) {
          // calculate only the rapid fraction remaining for IOB deduction
@@ -217,7 +217,7 @@ export function calculateSingleDoseIob(
   const remainingUnits = Math.max(0, Math.round(doseUnits * fraction * 100) / 100);
   
   let prandialRemaining = 0;
-  if (profile.category === 'rapid' || profile.category === 'regular' || profile.category === 'short') {
+  if (profile.category === 'rapid' || profile.category === 'regular') {
      prandialRemaining = remainingUnits;
   } else if (profile.category === 'premixed' && profile.biphasicRatio) {
      const rapidFraction = calculateMudaliarExponentialIob(elapsedHours, profile.peakMinHours || 1.5, 5.5);

@@ -90,10 +90,28 @@ export function calculatePeriodAnalysis(
   let day2Avg: number | undefined;
   let day3Avg: number | undefined;
 
-  if (periodDays === 3) {
-    const d1Vals = periodRecords.filter(r => r.dayIndex === 1).map(r => r.value);
-    const d2Vals = periodRecords.filter(r => r.dayIndex === 2).map(r => r.value);
-    const d3Vals = periodRecords.filter(r => r.dayIndex === 3).map(r => r.value);
+  if (periodDays === 3 && periodRecords.length > 0) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const oneDayMs = 86400000;
+
+    const d1Vals: number[] = [];
+    const d2Vals: number[] = [];
+    const d3Vals: number[] = [];
+
+    periodRecords.forEach(r => {
+      if (r.dayIndex === 1) d1Vals.push(r.value);
+      else if (r.dayIndex === 2) d2Vals.push(r.value);
+      else if (r.dayIndex === 3) d3Vals.push(r.value);
+      else {
+        const rDate = new Date(r.timestamp);
+        const rDayStart = new Date(rDate.getFullYear(), rDate.getMonth(), rDate.getDate()).getTime();
+        const diffDays = Math.floor((todayStart - rDayStart) / oneDayMs);
+        if (diffDays === 0) d3Vals.push(r.value);
+        else if (diffDays === 1) d2Vals.push(r.value);
+        else if (diffDays === 2) d1Vals.push(r.value);
+      }
+    });
 
     day1Avg = d1Vals.length > 0 ? Math.round(d1Vals.reduce((a, b) => a + b, 0) / d1Vals.length) : undefined;
     day2Avg = d2Vals.length > 0 ? Math.round(d2Vals.reduce((a, b) => a + b, 0) / d2Vals.length) : undefined;

@@ -420,6 +420,7 @@ export default function App() {
 
       <AgpExportModal
         profile={profile}
+        glucoseRecords={glucoseRecords}
         isOpen={showAgpExport}
         onClose={() => setShowAgpExport(false)}
       />
