@@ -1,19 +1,71 @@
-# 🩸 Comprehensive Diabetes & Nutrition Manager
+# BetaKinetics — Diabetes & Nutrition Planning PWA
 
-A modern, offline-capable Progressive Web Application (PWA) built to help individuals manage their diabetes, calculate precise insulin doses, and automate their nutritional meal planning. 
+BetaKinetics is a Progressive Web App concept for recording diabetes-related information, estimating nutrition targets, planning meals, and exploring insulin calculations. The repository uses a React and TypeScript frontend with Vite tooling.
 
-## ✨ Key Features
+> **Important medical safety notice:** This is an experimental software project, not a medical device or a substitute for clinician guidance. Do not use its insulin calculations or recommendations to make treatment decisions without independent clinical validation and approval from a qualified healthcare professional. Incorrect insulin dosing can cause severe hypoglycemia or other serious harm.
 
-* **Advanced Insulin Engine:** Calculates precise doses for rapid, long-acting, intermediate, and pre-mixed insulins. Supports sliding scales, insulin-to-carb ratios (ICR), and insulin sensitivity factors (ISF).
-* **Active Insulin (IOB) Tracking:** Automatically calculates Insulin on Board (IOB) to prevent dose stacking and hypoglycemic events.
-* **Automated Macro & Meal Planning:** Dynamically generates daily target calories based on BMR (Mifflin-St Jeor), activity levels, and custom weight goals (gain/lose/maintain). Automatically balances macros (Protein, Carbs, Fats) and splits them into a structured 6-meal daily routine.
-* **Granular Weight Goals:** Supports custom weight-gain/loss rates (e.g., 0.5% - 2.0% of body weight per month) and dynamically adjusts caloric surpluses and protein targets.
-* **Progressive Web App (PWA):** Installable on iOS and Android home screens with full offline capabilities and local storage persistence.
+## Project goals
 
-## 🛠️ Tech Stack
+- Record relevant glucose, meal, and insulin information where implemented.
+- Explore insulin-on-board (IOB) calculations and dose-tracking workflows.
+- Estimate calories and macronutrient targets from user-entered parameters.
+- Organize meal-planning and weight-goal information.
+- Provide an installable PWA experience with browser storage and offline support where configured.
 
-* **Frontend Framework:** React 18 
-* **Build Tool:** Vite
-* **Styling:** Tailwind CSS
-* **Language:** TypeScript
-* **State Management & Storage:** React Hooks + LocalStorage API
+These are project goals and code-described capabilities; they do not establish clinical accuracy or safety.
+
+## Technology
+
+- React and TypeScript
+- Vite
+- Tailwind CSS
+- React hooks and browser storage
+- Progressive Web App tooling
+
+See `package.json` and `vite.config.ts` for the current dependency and build configuration.
+
+## Requirements
+
+- Node.js compatible with the project's Vite and TypeScript dependencies
+- npm or another compatible package manager
+
+## Development setup
+
+```bash
+git clone https://github.com/nksdev/BetaKinetics.git
+cd BetaKinetics
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite.
+
+## Build and type-check
+
+```bash
+npm run build
+npm run lint
+```
+
+The `lint` script currently runs TypeScript's no-emit check. A successful build or type-check does not validate medical formulas or clinical behavior.
+
+## Before any real-world use
+
+- Have every calculation reviewed by qualified diabetes clinicians.
+- Test units, boundary conditions, rounding, time zones, missing data, and insulin-action assumptions.
+- Clearly distinguish recorded data from estimates.
+- Do not infer a dose from incomplete or stale inputs.
+- Protect health information and avoid uploading identifiable records to public repositories or external services.
+- Keep treatment decisions under the user's established care plan.
+
+## Repository notes
+
+The repository includes application source, a technical report, build configuration, and a number of development/fix scripts. Review those scripts before running them and confirm that the app builds cleanly from the current branch.
+
+## Maintainer
+
+[Naman Kumar Sonker](https://github.com/nksdev)
+
+## License
+
+See [LICENSE](LICENSE).
